@@ -1,1 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentWatch - live sessions</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 28px 18px;
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1100px 600px at 15% -10%, #1d2740 0%, #0f1115 55%, #0b0c10 100%);
+    color: #e8eaf0;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { margin: 0 0 2px; font-size: 26px; letter-spacing: -0.02em; }
+  h1 span { color: #ffb02e; }
+  p.sub { margin: 0 0 18px; color: #9aa3b2; font-size: 14px; }
+  .stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 22px; }
+  .stat { background: #171a21; border: 1px solid #262b36; border-radius: 12px; padding: 12px 16px; min-width: 110px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { color: #8b94a4; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .08em; color: #8b94a4; margin: 26px 0 10px; }
+  .card { background: #171a21; border: 1px solid #262b36; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; gap: 12px; }
+  .head { width: 36px; height: 36px; border-radius: 8px; background: #2a2f3a; flex: 0 0 36px; object-fit: cover; }
+  .name { font-weight: 650; }
+  .meta { color: #8b94a4; font-size: 12.5px; margin-top: 2px; }
+  .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; margin-left: auto; font-weight: 700; }
+  .pill.on { background: #14361f; color: #6ee79b; }
+  .pill.off { background: #3a1f24; color: #ff9aa6; }
+  .players { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: #21262f; border: 1px solid #2c333f; border-radius: 999px; padding: 2px 8px 2px 2px; font-size: 12px; }
+  .chip img { width: 18px; height: 18px; border-radius: 5px; }
+  .chat { margin-top: 10px; font-size: 13px; color: #c3cad6; max-height: 120px; overflow: auto; }
+  .chat div { padding: 1px 0; border-bottom: 1px solid #1d2129; }
+  .empty { color: #6f7887; font-size: 13px; padding: 8px 2px; }
+  footer { margin-top: 30px; color: #6f7887; font-size: 12px; }
+  code { background: #21262f; padding: 1px 6px; border-radius: 5px; color: #ffd18a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Agent<span>Watch</span></h1>
+  <p class="sub">Live sessions streamed from mod clients. Auto-refreshes every 3s.</p>
 
+  <div class="stats" id="stats"></div>
+
+  <h2>Sessions</h2>
+  <div id="sessions"><div class="empty">No sessions yet.</div></div>
+
+  <h2>Players seen (all in-game sessions)</h2>
+  <div id="players"><div class="empty">None.</div></div>
+
+  <footer>
+    Data from <code>GET /api/state</code>. The real website can be anything that reads these REST endpoints.
+  </footer>
+</div>
+
+<script>
+  const $ = (sel) => document.querySelector(sel);
+
+  function headUrl(p) {
+    if (p.skinUrl) return p.skinUrl;
+    if (p.uuid) return "https://mc-heads.net/avatar/" + encodeURIComponent(p.uuid) + "/36";
+    return null;
+  }
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function headImg(p, cls) {
+    const url = headUrl(p);
+    if (!url) return el("div", cls);
+    const img = el("img", cls);
+    img.src = url;
+    img.alt = p.name || "";
+    img.onerror = () => { img.style.visibility = "hidden"; };
+    return img;
+  }
+
+  function renderStats(c) {
+    const stats = [
+      ["Sessions", c.sessions],
+      ["In game", c.inGame],
+      ["Using mod", c.usingMod],
+      ["Players", c.players],
+    ];
+    const box = $("#stats");
+    box.textContent = "";
+    for (const [label, val] of stats) {
+      const s = el("div", "stat");
+      s.appendChild(el("b", null, String(val)));
+      s.appendChild(el("span", null, label));
+      box.appendChild(s);
+    }
+  }
+
+  function renderSessions(sessions) {
+    const box = $("#sessions");
+    box.textContent = "";
+    if (!sessions.length) {
+      box.appendChild(el("div", "empty", "No sessions yet."));
+      return;
+    }
+    for (const s of sessions) {
+      const card = el("div", "card");
+      const row = el("div", "row");
+
+      const h = headImg({ uuid: s.uuid, skinUrl: null }, "head");
+      row.appendChild(h);
+
+      const info = el("div");
+      info.appendChild(el("div", "name", s.username || "(unknown)"));
+      const meta = el("div", "meta");
+      meta.textContent = (s.uuid || "no uuid") + " · " + (s.minecraftVersion || "?") +
+        " · client " + (s.clientVersion || "?") + " · seen " + new Date(s.lastSeen).toLocaleTimeString();
+      info.appendChild(meta);
+      row.appendChild(info);
+
+      const pill = el("div", "pill " + (s.online ? "on" : "off"), s.online ? "in-game" : s.status);
+      row.appendChild(pill);
+      card.appendChild(row);
+
+      if (s.players && s.players.length) {
+        const pc = el("div", "players");
+        for (const p of s.players) {
+          const chip = el("span", "chip");
+          chip.appendChild(headImg(p, "head"));
+          chip.appendChild(el("span", null, p.name));
+          pc.appendChild(chip);
+        }
+        card.appendChild(pc);
+      }
+
+      if (s.chat && s.chat.length) {
+        const cc = el("div", "chat");
+        for (const m of s.chat.slice(-15)) {
+          cc.appendChild(el("div", null, m.text));
+        }
+        card.appendChild(cc);
+      }
+
+      box.appendChild(card);
+    }
+  }
+
+  function renderPlayers(players) {
+    const box = $("#players");
+    box.textContent = "";
+    if (!players.length) {
+      box.appendChild(el("div", "empty", "None."));
+      return;
+    }
+    const pc = el("div", "players");
+    for (const p of players) {
+      const chip = el("span", "chip");
+      chip.appendChild(headImg(p, "head"));
+      chip.appendChild(el("span", null, p.name));
+      pc.appendChild(chip);
+    }
+    box.appendChild(pc);
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch("/api/state");
+      const data = await res.json();
+      renderStats(data.counts);
+      renderSessions(data.sessions);
+      renderPlayers(data.players);
+    } catch (e) {
+      // backend unreachable - keep last render, try again next tick.
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 3000);
+</script>
+</body>
+</html>
