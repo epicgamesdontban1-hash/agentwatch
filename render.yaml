@@ -1,0 +1,25 @@
+# Render deployment descriptor. Commit this and use "Blueprint" / "render.yaml" when creating
+# the service, or create a Web Service manually and point it at this repo.
+#
+# Docs: https://render.com/docs/render-yaml-spec
+services:
+  - type: web
+    name: agentwatch
+    runtime: node
+    plan: free
+    region: oregon            # pick whatever is closest to your users
+    branch: main              # adjust to your default branch
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT is provided automatically by Render - do not set it here.
+      # Optional shared secret (see .env.example). Generate one and paste the value; leave unset for open access.
+      # - key: MOD_TOKEN
+      #   sync: false
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: LOG_LEVEL
+        value: info
